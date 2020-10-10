@@ -1,0 +1,12 @@
+# Set "sentryDsn" for integration with sentry.io.
+# If not set, logs are written to Console instead.
+
+# sentryDsn: https://....sentry.io/...
+
+# Name of the remote directory to back up to.
+# This will be on the root level, so a value of "foo"
+# will result in "/foo" on the remote.
+remoteDirectory: example
+
+megaUser: example
+megaPassword: example
