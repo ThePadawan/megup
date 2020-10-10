@@ -1,5 +1,7 @@
+using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using CG.Web.MegaApiClient;
 using Serilog;
 
@@ -7,7 +9,7 @@ namespace Megup
 {
     internal static class Backup
     {
-        public static int Run(Config config, string[] args)
+        public static async Task<int> Run(Config config, string[] args)
         {
             if (args.Length < 1)
             {
@@ -28,15 +30,21 @@ namespace Megup
             {
                 var remoteDirectory = EnsureEmptyRemoteDirectory(config, client);
 
-
-                foreach (var f in Directory.EnumerateFiles(localFolder))
+                foreach (var f in Directory.EnumerateFiles(localFolder).OrderBy(s => s))
                 {
                     var shortFileName = Path.GetFileName(f);
                     Log.Logger.Information(
                         $"Uploading local file \"{f}\" (\"{shortFileName}\") to remote dir \"{remoteDirectory.Name}\"");
+
+                    var progress = new Progress(shortFileName);
+
                     using (var fileStream = File.OpenRead(f))
                     {
-                        client.Upload(fileStream, shortFileName, remoteDirectory);
+                        await client.UploadAsync(
+                            fileStream,
+                            shortFileName,
+                            remoteDirectory,
+                            progress);
                     }
                 }
             }
@@ -58,6 +66,21 @@ namespace Megup
             }
 
             return client.CreateFolder(config.RemoteDirectory, root);
+        }
+
+        private class Progress : IProgress<double>
+        {
+            private readonly string name;
+
+            public Progress(string name)
+            {
+                this.name = name;
+            }
+
+            public void Report(double value)
+            {
+                Log.Logger.Information($"Progress for {this.name}: {value:N2}%");
+            }
         }
     }
 }

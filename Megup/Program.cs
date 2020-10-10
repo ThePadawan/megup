@@ -1,37 +1,32 @@
-﻿using Serilog;
+﻿using System.Threading.Tasks;
+using Serilog;
 
 namespace Megup
 {
     public static class Program
     {
-        public static int Main(string[] args)
+        public static async Task<int> Main(string[] args)
         {
             var config = ConfigLoader.Load();
             InitializeLogger(config);
 
-            return Backup.Run(config, args);
+            return await Backup.Run(config, args);
         }
 
         private static void InitializeLogger(Config config)
         {
-            if (config.SentryDsn == null)
-            {
-                Log.Logger = new LoggerConfiguration()
-                    .WriteTo.Console()
-                    .CreateLogger();
+            var loggerConfiguration = new LoggerConfiguration().WriteTo.Console();
 
-                Log.Logger.Information("No Sentry DSN set. Logging to stdout.");
-            }
-            else
+            if (config.SentryDsn != null)
             {
-                Log.Logger = new LoggerConfiguration()
+                loggerConfiguration = loggerConfiguration
                     .WriteTo.Sentry(options =>
                     {
                         options.Dsn = new Sentry.Dsn(config.SentryDsn);
-                    })
-                    .CreateLogger();
-                Log.Logger.Information("Logging to Sentry.");
+                    });
             }
+
+            Log.Logger = loggerConfiguration.CreateLogger();
         }
     }
 }
