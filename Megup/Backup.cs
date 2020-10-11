@@ -2,8 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using ByteSizeLib;
 using CG.Web.MegaApiClient;
-using Serilog;
 
 namespace Megup
 {
@@ -13,18 +13,22 @@ namespace Megup
         {
             if (args.Length < 1)
             {
-                Log.Logger.Error("You must specify a folder to back up");
+                MegupLog.SentryLogger.Error("You must specify a folder to back up");
                 return 1;
             }
 
             var localFolder = args[0];
             if (!Directory.Exists(localFolder))
             {
-                Log.Logger.Error($"Could not find local folder \"{localFolder}\"");
+                MegupLog.SentryLogger.Error($"Could not find local folder \"{localFolder}\"");
                 return 2;
             }
 
+            MegupLog.ReadableLogger.Information($"Starting backup at {DateTime.Now}");
+
             var client = new MegaApiClient();
+            var fileCount = 0;
+            var totalSize = 0L;
 
             using (MegaSession.Create(client, config.MegaUser, config.MegaPassword))
             {
@@ -33,8 +37,8 @@ namespace Megup
                 foreach (var f in Directory.EnumerateFiles(localFolder).OrderBy(s => s))
                 {
                     var shortFileName = Path.GetFileName(f);
-                    Log.Logger.Information(
-                        $"Uploading local file \"{f}\" (\"{shortFileName}\") to remote dir \"{remoteDirectory.Name}\"");
+                    MegupLog.SentryLogger.Information(
+                        $"Uploading local file \"{shortFileName}\" to remote dir \"{remoteDirectory.Name}\"");
 
                     var progress = new Progress(shortFileName);
 
@@ -45,9 +49,15 @@ namespace Megup
                             shortFileName,
                             remoteDirectory,
                             progress);
+
+                        fileCount++;
+                        totalSize += fileStream.Length;
                     }
                 }
             }
+
+            MegupLog.ReadableLogger.Information($"Completed backup at {DateTime.Now}");
+            MegupLog.ReadableLogger.Information($"Uploaded {fileCount} files ({ByteSize.FromBytes(totalSize)})");
 
             return 0;
         }
@@ -71,15 +81,22 @@ namespace Megup
         private class Progress : IProgress<double>
         {
             private readonly string name;
+            private double lastValue;
 
             public Progress(string name)
             {
                 this.name = name;
+                this.lastValue = 0.0d;
             }
 
             public void Report(double value)
             {
-                Log.Logger.Information($"Progress for {this.name}: {value:N2}%");
+                // Don't spam logs by printing every update, only in 5% steps.
+                if (value < lastValue + 5)
+                    return;
+
+                MegupLog.SentryLogger.Information($"Progress for {this.name}: {value:N2}%");
+                lastValue = value;
             }
         }
     }
