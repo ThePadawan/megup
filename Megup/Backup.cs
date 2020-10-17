@@ -1,3 +1,4 @@
+using System.Threading;
 using System;
 using System.IO;
 using System.Linq;
@@ -36,23 +37,7 @@ namespace Megup
 
                 foreach (var f in Directory.EnumerateFiles(localFolder).OrderBy(s => s))
                 {
-                    var shortFileName = Path.GetFileName(f);
-                    MegupLog.SentryLogger.Information(
-                        $"Uploading local file \"{shortFileName}\" to remote dir \"{remoteDirectory.Name}\"");
-
-                    var progress = new Progress(shortFileName);
-
-                    using (var fileStream = File.OpenRead(f))
-                    {
-                        await client.UploadAsync(
-                            fileStream,
-                            shortFileName,
-                            remoteDirectory,
-                            progress);
-
-                        fileCount++;
-                        totalSize += fileStream.Length;
-                    }
+                    totalSize += await Download(client, remoteDirectory, f);
                 }
             }
 
@@ -60,6 +45,40 @@ namespace Megup
             MegupLog.ReadableLogger.Information($"Uploaded {fileCount} files ({ByteSize.FromBytes(totalSize)})");
 
             return 0;
+        }
+
+        private static async Task<long> Download(MegaApiClient client, INode remoteDirectory, string f)
+        {
+            var shortFileName = Path.GetFileName(f);
+            MegupLog.SentryLogger.Information(
+                $"Uploading local file \"{shortFileName}\" to remote dir \"{remoteDirectory.Name}\"");
+
+            var progress = new Progress(shortFileName);
+
+            using (var fileStream = File.OpenRead(f))
+            {
+                var retryCount = 0;
+                while (retryCount < 3)
+                {
+                    try
+                    {
+                        await client.UploadAsync(
+                            fileStream,
+                            shortFileName,
+                            remoteDirectory,
+                            progress);
+                    }
+                    catch (ApiException)
+                    {
+                        // The MEGA API isn't all that reliable. Often, you might get a
+                        // "ResourceNotFound" or similar, and then it just goes away.
+                        retryCount++;
+                        Thread.Sleep(Convert.ToInt32(TimeSpan.FromMinutes(2).TotalMilliseconds));
+                    }
+                }
+
+                return fileStream.Length;
+            }
         }
 
         private static INode EnsureEmptyRemoteDirectory(Config config, MegaApiClient client)
