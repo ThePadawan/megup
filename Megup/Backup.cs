@@ -58,7 +58,8 @@ namespace Megup
             using (var fileStream = File.OpenRead(f))
             {
                 var retryCount = 0;
-                while (retryCount < 3)
+                var uploadSuccessful = false;
+                while (retryCount < 3 && !uploadSuccessful)
                 {
                     try
                     {
@@ -67,6 +68,7 @@ namespace Megup
                             shortFileName,
                             remoteDirectory,
                             progress);
+                        uploadSuccessful = true;
                     }
                     catch (ApiException)
                     {
