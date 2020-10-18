@@ -38,6 +38,7 @@ namespace Megup
                 foreach (var f in Directory.EnumerateFiles(localFolder).OrderBy(s => s))
                 {
                     totalSize += await Download(client, remoteDirectory, f);
+                    fileCount++;
                 }
             }
 
